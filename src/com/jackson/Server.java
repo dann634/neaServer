@@ -1,4 +1,7 @@
-import javax.print.attribute.standard.JobKOctets;
+package com.jackson;
+
+import com.jackson.network.shared.RequestPacket;
+
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -10,7 +13,7 @@ import java.util.List;
 public class Server {
     /*
     All Requests
-    ll - Requests lobby list - Return List<Lobby> Back from Database
+    ll - Requests lobby list - Return List<com.jackson.network.shared.Lobby> Back from Database
      */
 
     private static final int PORT = 4234;
@@ -29,6 +32,7 @@ public class Server {
         while(true) {
             try {
                 new ClientHandler(serverSocket.accept()).start();
+                System.out.println("Client connected");
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -52,8 +56,8 @@ public class Server {
                 this.inStream = new ObjectInputStream(this.clientSocket.getInputStream());
                 while(this.clientSocket.isConnected()) {
                     Object incomingObj = this.inStream.readObject();
-                    System.out.println("Packet Received");
-//                    processRequest((RequestPacket) incomingObj);
+                    System.out.println("Request received");
+                    processRequest((RequestPacket) incomingObj);
                 }
             } catch (IOException e) {
             } catch (ClassNotFoundException e) {
@@ -74,14 +78,14 @@ public class Server {
         private void sendLobbyList()  {
             try {
                 this.outStream.writeObject(connectionToDB.getLobbyList());
+                this.outStream.close();
+                this.inStream.close();
             } catch (IOException e) {
-                System.err.println("Error: Lobby List Failed to Send");
+                System.err.println("Error: com.jackson.network.shared.Lobby List Failed to Send");
+                e.printStackTrace();
             }
         }
 
-        private class RequestPacket {
-            private String request;
 
-        }
     }
 }

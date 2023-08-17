@@ -1,4 +1,12 @@
-public class Lobby {
+package com.jackson.network.shared;
+
+import com.jackson.game.Difficulty;
+
+import java.io.Serializable;
+
+public class Lobby implements Serializable {
+
+    private static final long serialVersionUID = 1L;
     private String name;
     private String hostIP;
     private int maxPlayers;
@@ -15,7 +23,5 @@ public class Lobby {
         this.password = password;
     }
 
-    enum Difficulty {
-        EASY, MEDIUM, HARD
-    }
+
 }

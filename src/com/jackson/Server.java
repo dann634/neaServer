@@ -1,7 +1,5 @@
 package com.jackson;
 
-import com.jackson.network.shared.RequestPacket;
-
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -18,23 +16,26 @@ public class Server {
 
     private static final int PORT = 4234;
     private ServerSocket serverSocket;
-    private List<ClientHandler> clientList;
     private ConnectionToDB connectionToDB;
 
-    public Server() throws IOException {
-        this.connectionToDB = new ConnectionToDB();
-        this.clientList = new ArrayList<>();
+    public Server() {
+        this.connectionToDB = new ConnectionToDB(); //Connects to Database
         try {
+            //Initialises the server socket with the specified port
             this.serverSocket = new ServerSocket(PORT);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            //Outputs appropriate error message
+            System.err.println("Error: Initialising Server Failed");
         }
-        while(true) {
+
+        while(true) { //Always listening for more clients
             try {
+                //Waits for new clients and then makes a new client handler on a new thread
                 new ClientHandler(serverSocket.accept()).start();
-                System.out.println("Client connected");
+
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                //Appropriate Error Message
+                System.err.println("Error: Client Connection Failed");
             }
         }
     }
@@ -49,26 +50,23 @@ public class Server {
         }
 
         @Override
-        public void run() {
-            clientList.add(this);
+        public void run() { //overridden method from Thread
             try {
-                this.outStream = new ObjectOutputStream(this.clientSocket.getOutputStream());
-                this.inStream = new ObjectInputStream(this.clientSocket.getInputStream());
-                while(this.clientSocket.isConnected()) {
-                    Object incomingObj = this.inStream.readObject();
-                    System.out.println("Request received");
-                    processRequest((RequestPacket) incomingObj);
-                }
-            } catch (IOException e) {
-            } catch (ClassNotFoundException e) {
-                throw new RuntimeException(e);
-            }
+                this.outStream = new ObjectOutputStream(this.clientSocket.getOutputStream()); //Connects outstream to socket
+                this.inStream = new ObjectInputStream(this.clientSocket.getInputStream()); //Connects instream to socket
 
+                Object incomingObj = this.inStream.readObject(); //Waits for new incoming object from client
+                processRequest((String) incomingObj); //Casts from Object to String and processes response
+
+            } catch (Exception e) {
+                //Prints error from thread name and closes client to prevent more errors
+                System.err.println("Error on " + getName() + ": closing client...");
+            }
         }
 
-        private void processRequest(RequestPacket packet) throws IOException {
-            switch (packet.request) {
-                case "ll":
+        private void processRequest(String request) {
+            switch (request) {
+                case "ll": //lobby list request
                     //get lobby list
                     sendLobbyList();
                     break;
@@ -77,12 +75,15 @@ public class Server {
 
         private void sendLobbyList()  {
             try {
+                //Gets List<Lobby> from database
+                //Sends on outstream
                 this.outStream.writeObject(connectionToDB.getLobbyList());
-                this.outStream.close();
-                this.inStream.close();
+                System.out.println("Sent Response");
+                this.outStream.close(); //closes outstream connection
+                this.inStream.close(); //Closes instream connection
             } catch (IOException e) {
-                System.err.println("Error: com.jackson.network.shared.Lobby List Failed to Send");
-                e.printStackTrace();
+                //Handles error and outputs message
+                System.err.println("Error: Lobby List Failed to Send");
             }
         }
 

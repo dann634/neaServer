@@ -70,6 +70,19 @@ public class Server {
                     //get lobby list
                     sendLobbyList();
                     break;
+                case "ping":
+                    sendPing();
+                    break;
+            }
+        }
+
+        private void sendPing() {
+            try {
+                outStream.writeObject("ping response");
+                this.outStream.close(); //closes outstream connection
+                this.inStream.close(); //Closes instream connection
+            } catch (IOException e) {
+                System.err.println("Error: Failed to Ping");
             }
         }
 
@@ -78,7 +91,6 @@ public class Server {
                 //Gets List<Lobby> from database
                 //Sends on outstream
                 this.outStream.writeObject(connectionToDB.getLobbyList());
-                System.out.println("Sent Response");
                 this.outStream.close(); //closes outstream connection
                 this.inStream.close(); //Closes instream connection
             } catch (IOException e) {

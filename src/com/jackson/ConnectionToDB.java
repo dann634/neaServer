@@ -16,6 +16,20 @@ public class ConnectionToDB {
 
         lobbyList.add(new Lobby("Lobby 2", "123.23.213.2", 8,
                 2, Difficulty.HARD, "notPassword"));
+        lobbyList.add(new Lobby("Lobby 2", "123.23.213.2", 8,
+                2, Difficulty.HARD, "notPassword"));
+        lobbyList.add(new Lobby("Lobby 2", "123.23.213.2", 8,
+                2, Difficulty.HARD, "notPassword"));
+        lobbyList.add(new Lobby("Lobby 2", "123.23.213.2", 8,
+                2, Difficulty.HARD, "notPassword"));
+        lobbyList.add(new Lobby("Lobby 2", "123.23.213.2", 8,
+                2, Difficulty.HARD, "notPassword"));
+        lobbyList.add(new Lobby("Lobby 2", "123.23.213.2", 8,
+                2, Difficulty.HARD, "notPassword")); lobbyList.add(new Lobby("Lobby 2", "123.23.213.2", 8,
+                2, Difficulty.HARD, "notPassword"));
+        lobbyList.add(new Lobby("Lobby 2", "123.23.213.2", 8,
+                2, Difficulty.HARD, "notPassword"));
+
         return lobbyList;
     }
 

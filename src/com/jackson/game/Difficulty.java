@@ -1,5 +1,7 @@
 package com.jackson.game;
 
-public enum Difficulty {
+import java.io.Serializable;
+
+public enum Difficulty implements Serializable {
     EASY, MEDIUM, HARD
 }

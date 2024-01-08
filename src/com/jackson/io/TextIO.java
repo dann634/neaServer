@@ -9,19 +9,22 @@ import java.util.List;
 public class TextIO {
 
     private TextIO() {
+        //No objects allowed
     }
 
 
     public static List<String> readFile(String dir) {
-
+        //Initialise list
         List<String> data = new ArrayList<>();
         try {
+            //Initialise Reader (with file directory)
             BufferedReader reader = new BufferedReader(new FileReader(dir));
 
-            String readLine = "";
-            while(true) {
-                readLine = reader.readLine();
+            String readLine; //Variable that holds the current line of data
+            while(true) { //Infinite loop
+                readLine = reader.readLine(); //Read line from
                 if(readLine == null) {
+                    //break condition
                     break;
                 }
                 data.add(readLine);
@@ -79,7 +82,7 @@ public class TextIO {
         return true;
     }
 
-    public static String[][] readMapFile() {
+    public static String[][] readMapFile() { // TODO: 08/01/2024 maybe rewrite using readFile()
         String dir = "resources/multiplayer.txt";
 
         if(!Files.exists(Path.of(dir))) {

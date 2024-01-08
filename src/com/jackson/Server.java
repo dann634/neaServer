@@ -191,6 +191,7 @@ public class Server {
                 }
 
                 case "pos_update" -> {
+                    //get change in x and y and current location in map
                     int[] data = (int[]) packet.getObject();
                     xPos = data[0];
                     yPos = data[1];
@@ -198,6 +199,7 @@ public class Server {
                     yOffset = data[3];
                     for(ClientHandler handler : players) {
                         if(handler != this) {
+                            //Send this information to everyone else
                             handler.send("pos_update", displayName, data);
                         }
                     }
@@ -206,13 +208,13 @@ public class Server {
         }
 
         private void send(String msg, Object object) throws IOException {
-            outStream.writeObject(new Packet(msg, object));
+            outStream.writeObject(new Packet(msg, object)); //Send packet to client
         }
 
         private void send(String msg, String ext, Object object) throws IOException {
             Packet packet = new Packet(msg, object);
-            packet.setExt(ext);
-            outStream.writeObject(packet);
+            packet.setExt(ext); //Set additional information
+            outStream.writeObject(packet); //Send packet to client
         }
 
 

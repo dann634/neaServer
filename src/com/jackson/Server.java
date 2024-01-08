@@ -24,12 +24,15 @@ public class Server {
 
     private static final int PORT = 4234;
     private ServerSocket serverSocket;
+    private final String SETTINGS_DIRECTORY = "resources/multiplayer_settings.txt";
+    private final String MAP_DIRECTORY = "resources/multiplayer.txt";
 
     //Game Fields
     private String[][] map;
-    private List<ClientHandler> players;
+    private final List<ClientHandler> players;
 
     public Server() {
+        //List for all connections
         players = new ArrayList<>();
         try {
             //Initialises the server socket with the specified port
@@ -52,9 +55,17 @@ public class Server {
     }
 
     private class ClientHandler extends Thread {
+
+        //Client Connection
         private final Socket clientSocket;
+
+        //Output Stream
         private ObjectOutputStream outStream;
+
+        //Input Stream
         private ObjectInputStream inStream;
+
+        //Tracks players location
         private int xPos;
         private int yPos;
         private int xOffset;
@@ -70,58 +81,70 @@ public class Server {
             try {
                 this.outStream = new ObjectOutputStream(this.clientSocket.getOutputStream()); //Connects outstream to socket
                 this.inStream = new ObjectInputStream(this.clientSocket.getInputStream()); //Connects instream to socket
-                map = TextIO.readMapFile();
+                map = TextIO.readMapFile(); //Text file is saved to memory
 
-                while(this.clientSocket.isConnected()) {
+                while(this.clientSocket.isConnected()) { //Will only run if the socket is connected
                     Packet packet = (Packet) this.inStream.readObject(); //Waits for new incoming object from client
-                    processRequest(packet); //Casts from Object to String and processes response
+                    processRequest(packet); //Passes packet to method responsible for managing the requests
                 }
 
             } catch (Exception e) {
-                //Prints error from thread name and closes client to prevent more errors
-//                System.err.println("Error on " + getName() + ": closing client...");
+                //Removes client from client list
                 players.remove(this);
             }
         }
+
+        /*
+        map - client is sending a map file to be saved in the multiplayer.txt file
+        join - client is requesting to join the server
+        world_check - client checking if a world already exists
+        username_check - client checking if their username is already in use
+        save_player_data - client requesting their player data be saved into a text file
+        pos_update - client is sending an update for their in-game position which is then sent to all other connected clients
+         */
 
         private void processRequest(Packet packet) throws IOException {
             switch (packet.getMsg()) {
                 case "map" -> {
                     map = (String[][]) packet.getObject();
-                    Files.deleteIfExists(Path.of("resources/multiplayer.txt"));
-                    Files.createFile(Path.of("resources/multiplayer.txt"));
-                    TextIO.writeMap(map, "resources/multiplayer.txt");
-
+                    Files.deleteIfExists(Path.of(MAP_DIRECTORY)); //Delete the existing File
+                    Files.createFile(Path.of(MAP_DIRECTORY)); //Create a new file
+                    TextIO.writeMap(map, MAP_DIRECTORY); //Write the map data to the file
                 }
+
                 case "join" -> {
-                    //Set values
-                    //xPos, yPos, xOffset, yOffset
+                    //Get display name from join request
                     displayName = (String) packet.getObject();
-                    //Check for data file
+                    //Send map file
                     send("map", map); //Send map to client
 
-
                     String dir = "resources/player_files/" + displayName + ".txt";
-                    if(Files.notExists(Path.of(dir))) { // FIXME: 04/01/2024 display name could be an invalid file name
+                    if(Files.notExists(Path.of(dir))) {
+                        //If player save file doens't exist, create one
                         Files.createFile(Path.of(dir));
                     }
+                    //Read file even if empty
                     List<String> playerData = TextIO.readFile(dir);
-                    send("player_data", playerData);
+                    send("player_data", playerData); //Send player save data to client
+
+                    //Position Data
                     int[] data;
                     if(playerData.isEmpty()) {
-                        data = new int[]{500, findStartingY(map), 0, 0};
+                        data = new int[]{500, findStartingY(map), 0, -60}; //Spawn
                     } else {
+                        //Saved Location
                         data = new int[]{Integer.parseInt(playerData.get(0)), Integer.parseInt(playerData.get(1)),
                                 Integer.parseInt(playerData.get(2)), Integer.parseInt(playerData.get(3))};
                     }
 
-                    if(Files.exists(Path.of("resources/multiplayer_settings.txt")) && !TextIO.readFile("resources/multiplayer_settings.txt").isEmpty()) {
-                        Difficulty difficulty = Difficulty.valueOf(TextIO.readFile("resources/multiplayer_settings.txt").get(0));
+                    if(!TextIO.readFile(SETTINGS_DIRECTORY).isEmpty()) {
+                        //Send saved world difficulty
+                        Difficulty difficulty = Difficulty.valueOf(TextIO.readFile(SETTINGS_DIRECTORY).get(0));
                         send("difficulty", difficulty);
                     } else {
+                        //If nothing saved send easy
                         send("difficulty", Difficulty.EASY);
                     }
-
 
                     //Get data for everyone else
                     for(ClientHandler player : players) {
@@ -130,8 +153,8 @@ public class Server {
 
                         //Load everyone already in game
                         send("player_join", player.displayName, player.getPosData());
-                        System.out.println(player.displayName);
                     }
+                    //Add client to list of clients
                     players.add(this);
                 }
 
@@ -141,25 +164,29 @@ public class Server {
                 }
 
                 case "username_check" -> { //to avoid two of the same username joining
-                    String displayName = (String) packet.getObject();
-                    for(ClientHandler player : players) {
+                    String displayName = (String) packet.getObject(); //Get display name from packet
+                    for(ClientHandler player : players) { //Loop through all players
                         if(player != this && player.displayName.equals(displayName)) {
+                            //if player has same name and isn't you
                             send("username_check", false);
                             return;
                         }
                     }
+                    //There's no one with the same display name
                     send("username_check", true);
                 }
 
                 case "save_player_data" -> {
-                    ArrayList<String> data = (ArrayList<String>) packet.getObject();
-                    String displayName = data.get(data.size()-1);
+                    List<String> data = (ArrayList<String>) packet.getObject(); //Get data
+                    String displayName = packet.getExt(); //Get display name
                     String dir = "resources/player_files/" + displayName + ".txt";
                     if(Files.notExists(Path.of(dir))) {
+                        //Create file if it doesn't exist already
                         Files.createFile(Path.of(dir));
                     }
-                    data.remove(data.size()-1); // TODO: 04/01/2024 maybe remove
+                    //Update file with new data
                     TextIO.updateFile(data, dir);
+                    //Remove client from list of players
                     players.remove(this);
                 }
 
@@ -209,7 +236,7 @@ public class Server {
         }
 
         private int[] getPosData() {
-            return new int[]{xPos, yPos, xOffset, yOffset};
+            return new int[]{xPos, yPos, xOffset, yOffset-32};
         }
 
 

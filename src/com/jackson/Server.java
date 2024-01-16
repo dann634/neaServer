@@ -4,7 +4,6 @@ import com.jackson.game.Difficulty;
 import com.jackson.io.TextIO;
 import com.jackson.network.shared.Packet;
 
-import javax.management.modelmbean.InvalidTargetObjectTypeException;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -12,8 +11,8 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.spec.RSAOtherPrimeInfo;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 public class Server {
@@ -204,6 +203,36 @@ public class Server {
                         }
                     }
                 }
+
+                case "disconnect" -> {
+                    String displayName = (String) packet.getObject();
+                    players.remove(this);
+                    for(ClientHandler handler : players) {
+                        //Send disconnect packet to other players
+                        handler.send("disconnect", this.displayName);
+                    }
+                    interrupt();
+                }
+
+                case "remove_block" -> {
+                    int[] blockPos = (int[]) packet.getObject();
+                    if(blockPos.length < 2) return; //Not valid data
+                    map[blockPos[0]][blockPos[1]] = "0"; //Update Map
+                    for(ClientHandler player : players) {
+                        if(player == this) continue;
+                        player.send("remove_block", blockPos);
+                    }
+                }
+
+                case "place_block" -> {
+                    int[] blockPos = (int[]) packet.getObject();
+                    if(blockPos.length < 2) return; //not valid data
+                    map[blockPos[0]][blockPos[1]] = packet.getExt(); //Update map
+                    for(ClientHandler player : players) {
+                        if(player == this) continue;
+                        player.send("place_block", packet.getExt(), packet.getObject());
+                    }
+                }
             }
         }
 
@@ -212,9 +241,7 @@ public class Server {
         }
 
         private void send(String msg, String ext, Object object) throws IOException {
-            Packet packet = new Packet(msg, object);
-            packet.setExt(ext); //Set additional information
-            outStream.writeObject(packet); //Send packet to client
+            outStream.writeObject(new Packet(msg, object, ext)); //Send packet to client
         }
 
 

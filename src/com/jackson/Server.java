@@ -5,6 +5,7 @@ import com.jackson.io.TextIO;
 import com.jackson.network.shared.Packet;
 
 import javax.management.modelmbean.InvalidTargetObjectTypeException;
+import java.io.File;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -13,8 +14,8 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.spec.RSAOtherPrimeInfo;
-import java.util.ArrayList;
-import java.util.List;
+import java.time.Duration;
+import java.util.*;
 
 public class Server {
     /*
@@ -42,6 +43,9 @@ public class Server {
             System.err.println("Error: Initialising Server Failed");
         }
 
+        GameHandler gameHandler = new GameHandler();
+        gameHandler.start();
+
         while(true) { //Always listening for more clients
             try {
                 //Waits for new clients and then makes a new client handler on a new thread
@@ -51,6 +55,77 @@ public class Server {
                 //Appropriate Error Message
                 System.err.println("Error: Client Connection Failed");
             }
+        }
+    }
+
+    private class GameHandler {
+
+        Difficulty difficulty;
+        Random rand;
+        private final double SPAWN_RATE;
+
+        public GameHandler() {
+            if(!TextIO.readFile(SETTINGS_DIRECTORY).isEmpty()) {
+                //Send saved world difficulty
+                difficulty = Difficulty.valueOf(TextIO.readFile(SETTINGS_DIRECTORY).get(0));
+            } else {
+                //If nothing saved send easy
+                difficulty = Difficulty.EASY;
+            }
+            rand = new Random();
+
+            SPAWN_RATE = switch (difficulty) {
+                case EASY -> 0.001;
+                case MEDIUM -> 0.0012;
+                case HARD -> 0.0015;
+            };
+        }
+
+        public void start() {
+            Timer timer = new Timer(true);
+            timer.scheduleAtFixedRate(new TimerTask() {
+                @Override
+                public void run() {
+
+                    try {
+                        spawnZombies();
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+
+                }
+            }, 0, 1000/60);
+        }
+
+        private void spawnZombies() throws IOException {
+//            if(rand.nextDouble() > SPAWN_RATE) return; //No spawn
+            if(players.isEmpty()) return;
+
+            //Choose unlucky player
+            ClientHandler player = players.get(rand.nextInt(players.size()));
+            int spawnXPos = player.xPos; // + rand.nextInt(32);
+            int packSize = (int) rand.nextGaussian(3, 1);
+
+            int[][] packLocation = new int[packSize+1][2];
+            packLocation[0][0] = spawnXPos;
+            packLocation[0][1] = findSolidBlock(spawnXPos);
+            for (int i = 0; i < packSize; i++) {
+                //xpos, ypos followed by zombie data
+                packLocation[i+1][0] = rand.nextInt(25);
+            }
+
+            for(ClientHandler handler : players) {
+                handler.send("zombie_spawn", packLocation);
+            }
+
+        }
+
+        private int findSolidBlock(int xPos) {
+            for (int i = 0; i < map[xPos].length; i++) {
+                if(map[xPos][i].equals("0") || map[xPos][i].equals("6") || (map[xPos][i].equals("5"))) continue;
+                return i;
+            }
+            return 0;
         }
     }
 
@@ -81,7 +156,7 @@ public class Server {
             try {
                 this.outStream = new ObjectOutputStream(this.clientSocket.getOutputStream()); //Connects outstream to socket
                 this.inStream = new ObjectInputStream(this.clientSocket.getInputStream()); //Connects instream to socket
-
+                map = TextIO.readMapFile();
                 while(this.clientSocket.isConnected()) { //Will only run if the socket is connected
                     Packet packet = (Packet) this.inStream.readObject(); //Waits for new incoming object from client
                     processRequest(packet); //Passes packet to method responsible for managing the requests
@@ -129,7 +204,7 @@ public class Server {
                     //Position Data
                     int[] data;
                     if(playerData.isEmpty()) {
-                        data = new int[]{500, findStartingY(map), 0, -60}; //Spawn
+                        data = new int[]{500, findStartingY(), 0, -60}; //Spawn
                     } else {
                         //Saved Location
                         data = new int[]{Integer.parseInt(playerData.get(0)), Integer.parseInt(playerData.get(1)),
@@ -204,10 +279,43 @@ public class Server {
                     }
                 }
 
-                case "delete_save" -> {
-                    Files.deleteIfExists(Path.of("resources/multiplayer.txt"));
+                case "disconnect" -> {
+                    String displayName = (String) packet.getObject();
+                    players.remove(this);
+                    for(ClientHandler handler : players) {
+                        //Send disconnect packet to other players
+                        handler.send("disconnect", this.displayName);
+                    }
+                    interrupt();
+                }
+
+                case "remove_block" -> {
+                    int[] blockPos = (int[]) packet.getObject();
+                    if(blockPos.length < 2) return; //Not valid data
+                    map[blockPos[0]][blockPos[1]] = "0"; //Update Map
+                    for(ClientHandler player : players) {
+                        if(player == this) continue;
+                        player.send("remove_block", blockPos);
+                    }
+                }
+
+                case "place_block" -> {
+                    int[] blockPos = (int[]) packet.getObject();
+                    if(blockPos.length < 2) return; //not valid data
+                    map[blockPos[0]][blockPos[1]] = packet.getExt(); //Update map
+                    for(ClientHandler player : players) {
+                        if(player == this) continue;
+                        player.send("place_block", packet.getExt(), packet.getObject());
+                    }
                 }
             }
+        }
+
+        private int findStartingY() {
+            for (int i = 0; i < map[500].length; i++) {
+                if(map[500][i].equals("2")) return i;
+            }
+            return 0;
         }
 
         private void send(String msg, Object object) throws IOException {
@@ -215,30 +323,12 @@ public class Server {
         }
 
         private void send(String msg, String ext, Object object) throws IOException {
-            Packet packet = new Packet(msg, object);
-            packet.setExt(ext); //Set additional information
+            Packet packet = new Packet(msg, object, ext);
             outStream.writeObject(packet); //Send packet to client
         }
 
 
-        private void sendPing() {
-            try {
-                outStream.writeObject("ping response");
-                this.outStream.close(); //closes outstream connection
-                this.inStream.close(); //Closes instream connection
-            } catch (IOException e) {
-                System.err.println("Error: Failed to Ping");
-            }
-        }
 
-        private int findStartingY(String[][] map) {
-            for (int i = 0; i < 300; i++) {
-                if(map[500][i].equals("2")) {
-                    return i;
-                }
-            }
-            return -1;
-        }
 
         private int[] getPosData() {
             return new int[]{xPos, yPos, xOffset, yOffset-32};
@@ -246,4 +336,6 @@ public class Server {
 
 
     }
+
+
 }

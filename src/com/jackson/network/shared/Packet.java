@@ -1,5 +1,6 @@
 package com.jackson.network.shared;
 
+import javax.management.openmbean.OpenMBeanConstructorInfo;
 import java.io.Serial;
 import java.io.Serializable;
 
@@ -15,9 +16,12 @@ public class Packet implements Serializable {
         this.msg = msg;
     }
 
-    public void setExt(String ext) {
+    public Packet(String msg, Object object, String ext) {
+        this.object = object;
+        this.msg = msg;
         this.ext = ext;
     }
+
     public String getExt() {
         return ext;
     }

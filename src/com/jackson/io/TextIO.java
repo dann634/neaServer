@@ -22,28 +22,27 @@ public class TextIO {
 
             String readLine; //Variable that holds the current line of data
             while(true) { //Infinite loop
-                readLine = reader.readLine(); //Read line from
+                readLine = reader.readLine(); //Read line from file
                 if(readLine == null) {
                     //break condition
                     break;
                 }
-                data.add(readLine);
+                data.add(readLine); //Add line to list
             }
-            reader.close();
+            reader.close(); //Close reader when all data has been read
         } catch (IOException ignored) {
         }
         return data;
     }
 
-    public static boolean updateFile(List<String> data, String dir) {
+    public static void updateFile(List<String> data, String dir) {
 
-        if(data == null || data.isEmpty()) { //Gatekeeping
-            return false;
+        if(data == null || data.isEmpty()) { //Gate keeping
+            return;
         }
 
         try {
             BufferedWriter writer = new BufferedWriter(new FileWriter(dir, false));
-
             writer.write(""); //Clears file
             for(String line : data) {
                 writer.write(line + "\n"); //Writes new data and adds line break
@@ -52,17 +51,15 @@ public class TextIO {
             writer.close(); //Closes bufferedWriter
         } catch (IOException e) {
             System.err.println("Error: File Writing Failed");
-            return false;
         }
-        return true; // returns true if file write was successful
     }
 
 
 
 
-    public static boolean writeMap(String[][] bitmap, String dir) {
+    public static void writeMap(String[][] bitmap, String dir) {
         if(bitmap == null || bitmap.length == 0) { //Gatekeeping
-            return false;
+            return;
         }
 
         try {
@@ -77,15 +74,13 @@ public class TextIO {
             }
             writer.close();
         } catch (IOException e) {
-            return false;
         }
-        return true;
     }
 
     public static String[][] readMapFile() { // TODO: 08/01/2024 maybe rewrite using readFile()
         String dir = "resources/multiplayer.txt";
 
-        if(!Files.exists(Path.of(dir))) {
+        if(Files.notExists(Path.of(dir))) {
             System.err.println("Save file not found");
             return null;
         }
@@ -105,6 +100,7 @@ public class TextIO {
                 }
             }
             reader.close();
+
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

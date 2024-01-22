@@ -81,7 +81,6 @@ public class Server {
             try {
                 this.outStream = new ObjectOutputStream(this.clientSocket.getOutputStream()); //Connects outstream to socket
                 this.inStream = new ObjectInputStream(this.clientSocket.getInputStream()); //Connects instream to socket
-                map = TextIO.readMapFile(); //Text file is saved to memory
 
                 while(this.clientSocket.isConnected()) { //Will only run if the socket is connected
                     Packet packet = (Packet) this.inStream.readObject(); //Waits for new incoming object from client
@@ -203,6 +202,10 @@ public class Server {
                             handler.send("pos_update", displayName, data);
                         }
                     }
+                }
+
+                case "delete_save" -> {
+                    Files.deleteIfExists(Path.of("resources/multiplayer.txt"));
                 }
             }
         }

@@ -4,8 +4,6 @@ import com.jackson.game.Difficulty;
 import com.jackson.io.TextIO;
 import com.jackson.network.shared.Packet;
 
-import javax.management.modelmbean.InvalidTargetObjectTypeException;
-import java.io.File;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -13,28 +11,26 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.spec.RSAOtherPrimeInfo;
-import java.time.Duration;
 import java.util.*;
 
 public class Server {
-    /*
-    All Requests
-    ll - Requests lobby list - Return List<com.jackson.network.shared.Lobby> Back from Database
-     */
 
     private static final int PORT = 4234;
     private ServerSocket serverSocket;
     private final String SETTINGS_DIRECTORY = "resources/multiplayer_settings.txt";
-    private final String MAP_DIRECTORY = "resources/multiplayer.txt";
+    private final Set<Integer> zombieIds;
+    private final Set<Integer> droppedBlocksIds;
 
     //Game Fields
     private String[][] map;
     private final List<ClientHandler> players;
+    private final GameHandler gameHandler;
 
     public Server() {
         //List for all connections
         players = new ArrayList<>();
+        zombieIds = new HashSet<>();
+        droppedBlocksIds = new HashSet<>();
         try {
             //Initialises the server socket with the specified port
             this.serverSocket = new ServerSocket(PORT);
@@ -43,7 +39,9 @@ public class Server {
             System.err.println("Error: Initialising Server Failed");
         }
 
-        GameHandler gameHandler = new GameHandler();
+        map = TextIO.readMapFile();
+
+        gameHandler = new GameHandler();
         gameHandler.start();
 
         while(true) { //Always listening for more clients
@@ -81,6 +79,8 @@ public class Server {
             };
         }
 
+
+
         public void start() {
             Timer timer = new Timer(true);
             timer.scheduleAtFixedRate(new TimerTask() {
@@ -98,34 +98,49 @@ public class Server {
         }
 
         private void spawnZombies() throws IOException {
-//            if(rand.nextDouble() > SPAWN_RATE) return; //No spawn
+            if(rand.nextDouble() > SPAWN_RATE * players.size()) return; //No spawn
             if(players.isEmpty()) return;
 
             //Choose unlucky player
             ClientHandler player = players.get(rand.nextInt(players.size()));
-            int spawnXPos = player.xPos; // + rand.nextInt(32);
+            int spawnXPos = player.xPos - 18 + rand.nextInt(32);
             int packSize = (int) rand.nextGaussian(3, 1);
-
             int[][] packLocation = new int[packSize+1][2];
             packLocation[0][0] = spawnXPos;
             packLocation[0][1] = findSolidBlock(spawnXPos);
             for (int i = 0; i < packSize; i++) {
                 //xpos, ypos followed by zombie data
                 packLocation[i+1][0] = rand.nextInt(25);
+                packLocation[i+1][1] = assignNewID(zombieIds);
             }
 
+
             for(ClientHandler handler : players) {
-                handler.send("zombie_spawn", packLocation);
+                handler.send("zombie_spawn", player.displayName, packLocation);
             }
 
         }
 
         private int findSolidBlock(int xPos) {
+            if(xPos < 0) return 0; //Not valid
             for (int i = 0; i < map[xPos].length; i++) {
                 if(map[xPos][i].equals("0") || map[xPos][i].equals("6") || (map[xPos][i].equals("5"))) continue;
                 return i;
             }
             return 0;
+        }
+
+        private int assignNewID(Set<Integer> set) {
+            //Finds next available index
+            int counter = 0;
+            while(true) {
+                if(set.contains(counter)) {
+                    counter++;
+                    continue;
+                }
+                set.add(counter);
+                return counter;
+            }
         }
     }
 
@@ -156,7 +171,6 @@ public class Server {
             try {
                 this.outStream = new ObjectOutputStream(this.clientSocket.getOutputStream()); //Connects outstream to socket
                 this.inStream = new ObjectInputStream(this.clientSocket.getInputStream()); //Connects instream to socket
-                map = TextIO.readMapFile();
                 while(this.clientSocket.isConnected()) { //Will only run if the socket is connected
                     Packet packet = (Packet) this.inStream.readObject(); //Waits for new incoming object from client
                     processRequest(packet); //Passes packet to method responsible for managing the requests
@@ -181,6 +195,7 @@ public class Server {
             switch (packet.getMsg()) {
                 case "map" -> {
                     map = (String[][]) packet.getObject();
+                    String MAP_DIRECTORY = "resources/multiplayer.txt";
                     Files.deleteIfExists(Path.of(MAP_DIRECTORY)); //Delete the existing File
                     Files.createFile(Path.of(MAP_DIRECTORY)); //Create a new file
                     TextIO.writeMap(map, MAP_DIRECTORY); //Write the map data to the file
@@ -204,11 +219,14 @@ public class Server {
                     //Position Data
                     int[] data;
                     if(playerData.isEmpty()) {
-                        data = new int[]{500, findStartingY(), 0, -60}; //Spawn
+                        data = new int[]{500, findStartingY(), 0, 0}; //Spawn
                     } else {
                         //Saved Location
-                        data = new int[]{Integer.parseInt(playerData.get(0)), Integer.parseInt(playerData.get(1)),
-                                Integer.parseInt(playerData.get(2)), Integer.parseInt(playerData.get(3))};
+                        xPos = Integer.parseInt(playerData.get(0));
+                        yPos = Integer.parseInt(playerData.get(1));
+                        xOffset = Integer.parseInt(playerData.get(2));
+                        yOffset = Integer.parseInt(playerData.get(3));
+                        data = new int[]{xPos, yPos, xOffset, yOffset};
                     }
 
                     if(!TextIO.readFile(SETTINGS_DIRECTORY).isEmpty()) {
@@ -280,7 +298,6 @@ public class Server {
                 }
 
                 case "disconnect" -> {
-                    String displayName = (String) packet.getObject();
                     players.remove(this);
                     for(ClientHandler handler : players) {
                         //Send disconnect packet to other players
@@ -308,6 +325,23 @@ public class Server {
                         player.send("place_block", packet.getExt(), packet.getObject());
                     }
                 }
+
+                case "damage_zombie", "update_zombie_pos" -> {
+                    for(ClientHandler player : players) {
+                        if(player == this) continue;
+                        player.send(packet);
+                    }
+                }
+
+                case "create_dropped_item" -> {
+                    int id = gameHandler.assignNewID(droppedBlocksIds);
+                    int[] data = (int[]) packet.getObject();
+                    data[3] = id; //Add id
+                    for(ClientHandler handler : players) {
+                        handler.send("create_dropped_item", packet.getExt(), data);
+                    }
+                }
+
             }
         }
 
@@ -325,6 +359,10 @@ public class Server {
         private void send(String msg, String ext, Object object) throws IOException {
             Packet packet = new Packet(msg, object, ext);
             outStream.writeObject(packet); //Send packet to client
+        }
+
+        private void send(Packet packet) throws IOException {
+            outStream.writeObject(packet);
         }
 
 

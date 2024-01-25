@@ -287,12 +287,13 @@ public class Server {
                     int[] data = (int[]) packet.getObject();
                     xPos = data[0];
                     yPos = data[1];
-                    xOffset = data[2];
-                    yOffset = data[3];
+                    xOffset = data[4];
+                    yOffset = data[5];
+                    int[] change = new int[]{data[0], data[1], data[2], data[3]};
                     for(ClientHandler handler : players) {
                         if(handler != this) {
                             //Send this information to everyone else
-                            handler.send("pos_update", displayName, data);
+                            handler.send("pos_update", displayName, change);
                         }
                     }
                 }

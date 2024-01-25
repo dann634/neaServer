@@ -87,11 +87,11 @@ public class Server {
                 @Override
                 public void run() {
 
-                    try {
-                        spawnZombies();
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
+//                    try {
+//                        spawnZombies();
+//                    } catch (IOException e) {
+//                        throw new RuntimeException(e);
+//                    }
 
                 }
             }, 0, 1000/60);
@@ -342,6 +342,7 @@ public class Server {
                     }
                 }
 
+
             }
         }
 
@@ -369,7 +370,7 @@ public class Server {
 
 
         private int[] getPosData() {
-            return new int[]{xPos, yPos, xOffset, yOffset-32};
+            return new int[]{xPos, yPos, xOffset, yOffset + 16};
         }
 
 

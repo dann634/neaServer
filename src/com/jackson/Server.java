@@ -4,6 +4,7 @@ import com.jackson.game.Difficulty;
 import com.jackson.io.TextIO;
 import com.jackson.network.shared.Packet;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -161,7 +162,7 @@ public class Server {
         private int xOffset;
         private int yOffset;
         private String displayName;
-
+        private final Path MAP_PATH = Path.of("resources/multiplayer.txt");
         public ClientHandler(Socket clientSocket) {
             this.clientSocket = clientSocket;
         }
@@ -196,8 +197,8 @@ public class Server {
                 case "map" -> {
                     map = (String[][]) packet.getObject();
                     String MAP_DIRECTORY = "resources/multiplayer.txt";
-                    Files.deleteIfExists(Path.of(MAP_DIRECTORY)); //Delete the existing File
-                    Files.createFile(Path.of(MAP_DIRECTORY)); //Create a new file
+                    Files.deleteIfExists(MAP_PATH); //Delete the existing File
+                    Files.createFile(MAP_PATH); //Create a new file
                     TextIO.writeMap(map, MAP_DIRECTORY); //Write the map data to the file
                 }
 
@@ -246,13 +247,14 @@ public class Server {
                         //Load everyone already in game
                         send("player_join", player.displayName, player.getPosData());
                     }
+
                     //Add client to list of clients
                     players.add(this);
                 }
 
                 case "world_check" -> {
                     //Does multiplayer world exist
-                    send("world_check_response", Files.exists(Path.of("resources/multiplayer.txt")));
+                    send("world_check_response", Files.exists(MAP_PATH));
                 }
 
                 case "username_check" -> { //to avoid two of the same username joining
@@ -290,12 +292,7 @@ public class Server {
                     xOffset = data[4];
                     yOffset = data[5];
                     int[] change = new int[]{data[0], data[1], data[2], data[3]};
-                    for(ClientHandler handler : players) {
-                        if(handler != this) {
-                            //Send this information to everyone else
-                            handler.send("pos_update", displayName, change);
-                        }
-                    }
+                    broadcast("pos_update", displayName, change);
                 }
 
                 case "disconnect" -> {
@@ -311,37 +308,32 @@ public class Server {
                     int[] blockPos = (int[]) packet.getObject();
                     if(blockPos.length < 2) return; //Not valid data
                     map[blockPos[0]][blockPos[1]] = "0"; //Update Map
-                    for(ClientHandler player : players) {
-                        if(player == this) continue;
-                        player.send("remove_block", blockPos);
-                    }
+                    broadcast("remove_block", blockPos);
                 }
 
                 case "place_block" -> {
                     int[] blockPos = (int[]) packet.getObject();
                     if(blockPos.length < 2) return; //not valid data
                     map[blockPos[0]][blockPos[1]] = packet.getExt(); //Update map
-                    for(ClientHandler player : players) {
-                        if(player == this) continue;
-                        player.send("place_block", packet.getExt(), packet.getObject());
-                    }
+                    broadcast("place_block", packet.getExt(), packet.getObject());
                 }
 
-                case "damage_zombie", "update_zombie_pos" -> {
-                    for(ClientHandler player : players) {
-                        if(player == this) continue;
-                        player.send(packet);
-                    }
+                case "damage_zombie", "update_zombie_pos", "pickup_item" -> {
+                    broadcast(packet);
                 }
 
                 case "create_dropped_item" -> {
                     int id = gameHandler.assignNewID(droppedBlocksIds);
                     int[] data = (int[]) packet.getObject();
                     data[3] = id; //Add id
-                    for(ClientHandler handler : players) {
-                        handler.send("create_dropped_item", packet.getExt(), data);
-                    }
+                    broadcast("create_dropped_item", packet.getExt(), data);
                 }
+
+                case "delete_save" -> {
+                    Files.deleteIfExists(MAP_PATH);
+                    List.of(new File("resources/player_files").listFiles()).forEach(File::delete);
+                }
+
 
 
             }
@@ -362,6 +354,29 @@ public class Server {
             Packet packet = new Packet(msg, object, ext);
             outStream.writeObject(packet); //Send packet to client
         }
+
+        private void broadcast(String msg, String ext, Object data) throws IOException {
+            for(ClientHandler player : players) {
+                if(player == this) continue;
+                player.send(msg, ext, data);
+            }
+        }
+
+        private void broadcast(String msg, Object data) throws IOException {
+            for(ClientHandler player : players) {
+                if(player == this) continue;
+                player.send(msg, data);
+            }
+        }
+
+        private void broadcast(Packet packet) throws IOException {
+            for(ClientHandler player : players) {
+                if(player == this) continue;
+                player.send(packet);
+            }
+        }
+
+
 
         private void send(Packet packet) throws IOException {
             outStream.writeObject(packet);

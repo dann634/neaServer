@@ -326,7 +326,7 @@ public class Server {
                     int id = gameHandler.assignNewID(droppedBlocksIds);
                     int[] data = (int[]) packet.getObject();
                     data[3] = id; //Add id
-                    broadcast("create_dropped_item", packet.getExt(), data);
+                    absoluteBroadcast("create_dropped_item", packet.getExt(), data);
                 }
 
                 case "delete_save" -> {
@@ -373,6 +373,12 @@ public class Server {
             for(ClientHandler player : players) {
                 if(player == this) continue;
                 player.send(packet);
+            }
+        }
+
+        private void absoluteBroadcast(String msg, String ext, Object data) throws IOException { //Broadcast to everyone include themself
+            for(ClientHandler player : players) {
+                player.send(msg, ext, data);
             }
         }
 

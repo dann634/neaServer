@@ -88,11 +88,11 @@ public class Server {
                 @Override
                 public void run() {
 
-//                    try {
-//                        spawnZombies();
-//                    } catch (IOException e) {
-//                        throw new RuntimeException(e);
-//                    }
+                    try {
+                        spawnZombies();
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
 
                 }
             }, 0, 1000/60);
@@ -126,7 +126,7 @@ public class Server {
             if(xPos < 0) return 0; //Not valid
             for (int i = 0; i < map[xPos].length; i++) {
                 if(map[xPos][i].equals("0") || map[xPos][i].equals("6") || (map[xPos][i].equals("5"))) continue;
-                return i;
+                return i - 2;
             }
             return 0;
         }
@@ -200,6 +200,10 @@ public class Server {
                     Files.deleteIfExists(MAP_PATH); //Delete the existing File
                     Files.createFile(MAP_PATH); //Create a new file
                     TextIO.writeMap(map, MAP_DIRECTORY); //Write the map data to the file
+                }
+
+                case "difficulty" -> {
+                    TextIO.updateFile(List.of(packet.getObject().toString()), "resources/multiplayer_settings.txt");
                 }
 
                 case "join" -> {
@@ -297,10 +301,7 @@ public class Server {
 
                 case "disconnect" -> {
                     players.remove(this);
-                    for(ClientHandler handler : players) {
-                        //Send disconnect packet to other players
-                        handler.send("disconnect", this.displayName);
-                    }
+                    absoluteBroadcast("disconnect", displayName);
                     interrupt();
                 }
 
@@ -332,6 +333,10 @@ public class Server {
                 case "delete_save" -> {
                     Files.deleteIfExists(MAP_PATH);
                     List.of(new File("resources/player_files").listFiles()).forEach(File::delete);
+                }
+
+                case "respawn" -> {
+                    broadcast("respawn", displayName, new int[]{500, findStartingY(), 0, 0});
                 }
 
 
@@ -379,6 +384,12 @@ public class Server {
         private void absoluteBroadcast(String msg, String ext, Object data) throws IOException { //Broadcast to everyone include themself
             for(ClientHandler player : players) {
                 player.send(msg, ext, data);
+            }
+        }
+
+        private void absoluteBroadcast(String msg,  Object data) throws IOException { //Broadcast to everyone include themself
+            for(ClientHandler player : players) {
+                player.send(msg, data);
             }
         }
 

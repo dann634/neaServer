@@ -88,11 +88,11 @@ public class Server {
                 @Override
                 public void run() {
 
-//                    try {
-//                        spawnZombies();
-//                    } catch (IOException e) {
-//                        throw new RuntimeException(e);
-//                    }
+                    try {
+                        spawnZombies();
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
 
                 }
             }, 0, 1000/60);
@@ -347,7 +347,12 @@ public class Server {
                     broadcast("respawn", displayName, new int[]{500, findStartingY(), 0, 0});
                 }
 
-
+                case "spawn_boss" -> {
+                    //Receives Boss Spawn Pos from client
+                    int[] pos = (int[]) packet.getObject();
+                    int[] data = new int[]{gameHandler.assignNewID(zombieIds), pos[0], pos[1]};
+                    absoluteBroadcast("spawn_boss", displayName, data);
+                }
 
             }
         }

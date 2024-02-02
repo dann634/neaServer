@@ -59,8 +59,8 @@ public class Server {
 
     private class GameHandler {
 
-        Difficulty difficulty;
-        Random rand;
+        private Difficulty difficulty;
+        private final Random rand;
         private final double SPAWN_RATE;
 
         public GameHandler() {
@@ -88,11 +88,11 @@ public class Server {
                 @Override
                 public void run() {
 
-                    try {
-                        spawnZombies();
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
+//                    try {
+//                        spawnZombies();
+//                    } catch (IOException e) {
+//                        throw new RuntimeException(e);
+//                    }
 
                 }
             }, 0, 1000/60);
@@ -100,12 +100,14 @@ public class Server {
 
         private void spawnZombies() throws IOException {
             if(rand.nextDouble() > SPAWN_RATE * players.size()) return; //No spawn
-            if(players.isEmpty()) return;
+            if(players.isEmpty()) return; //No one on server
 
             //Choose unlucky player
             ClientHandler player = players.get(rand.nextInt(players.size()));
             int spawnXPos = player.xPos - 18 + rand.nextInt(32);
             int packSize = (int) rand.nextGaussian(3, 1);
+
+            //Location
             int[][] packLocation = new int[packSize+1][2];
             packLocation[0][0] = spawnXPos;
             packLocation[0][1] = findSolidBlock(spawnXPos);
@@ -115,7 +117,7 @@ public class Server {
                 packLocation[i+1][1] = assignNewID(zombieIds);
             }
 
-
+            //Send packet to every client
             for(ClientHandler handler : players) {
                 handler.send("zombie_spawn", player.displayName, packLocation);
             }
@@ -142,6 +144,10 @@ public class Server {
                 set.add(counter);
                 return counter;
             }
+        }
+
+        public void setDifficulty(Difficulty diff) {
+            difficulty = diff;
         }
     }
 
@@ -204,6 +210,7 @@ public class Server {
 
                 case "difficulty" -> {
                     TextIO.updateFile(List.of(packet.getObject().toString()), "resources/multiplayer_settings.txt");
+                    gameHandler.setDifficulty((Difficulty) packet.getObject());
                 }
 
                 case "join" -> {
@@ -300,9 +307,9 @@ public class Server {
                 }
 
                 case "disconnect" -> {
-                    players.remove(this);
+                    players.remove(this); //Remove player from client list
                     absoluteBroadcast("disconnect", displayName);
-                    interrupt();
+                    interrupt(); //Stop thread
                 }
 
                 case "remove_block" -> {
@@ -333,6 +340,7 @@ public class Server {
                 case "delete_save" -> {
                     Files.deleteIfExists(MAP_PATH);
                     List.of(new File("resources/player_files").listFiles()).forEach(File::delete);
+                    absoluteBroadcast("kick", null);
                 }
 
                 case "respawn" -> {
@@ -381,13 +389,17 @@ public class Server {
             }
         }
 
-        private void absoluteBroadcast(String msg, String ext, Object data) throws IOException { //Broadcast to everyone include themself
+        private void absoluteBroadcast(String msg, String ext, Object data)
+                throws IOException {
+
             for(ClientHandler player : players) {
                 player.send(msg, ext, data);
             }
         }
 
-        private void absoluteBroadcast(String msg,  Object data) throws IOException { //Broadcast to everyone include themself
+        private void absoluteBroadcast(String msg,  Object data)
+                throws IOException {
+
             for(ClientHandler player : players) {
                 player.send(msg, data);
             }
